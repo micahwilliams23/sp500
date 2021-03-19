@@ -1,0 +1,56 @@
+---
+title: "Long Term S&P 500 Models"
+author: "Micah Williams"
+date: "3/18/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# set options
+knitr::opts_chunk$set(echo = F,
+                      fig.width = 7,
+                      fig.height = 5,
+                      fig.align = 'center')
+
+# import required packages
+library(tidyverse)
+library(RColorBrewer)
+library(lubridate)
+
+theme_set(theme_minimal())
+
+# import S&P500 data from Quandl package
+sp <- Quandl::Quandl("MULTPL/SP500_INFLADJ_MONTH", api_key="ouXsKHk7DUeaYiFanm9b") %>%
+  janitor::clean_names()
+
+# import recession dates
+recessions <- read_csv('data/nber_recessions.csv') %>% 
+  filter(end > min(sp$date))
+```
+
+```{r structure, fig.width= 7.5}
+head(sp)
+sp %>%
+  ggplot() +
+  geom_line(aes(date, value),
+            color = 'navy',
+            size = 1.2) +
+  
+  geom_rect(aes(xmin = start, xmax = end,
+                ymin = 70.77, ymax = 3901.82),
+            fill = 'gray',
+            alpha = 0.5,
+            data = recessions) +
+  
+  labs(title = 'Average S&P500 Closing Price by Month, from Jan. 1, 1871 to March 1, 2021',
+       subtitle = 'Shaded areas indicate recessions',
+       caption = 'Values are inflation-adjusted to Jan. 2021') +
+  
+  scale_y_log10(name = 'Average Closing Price (log scale)') +
+  scale_x_date(breaks = as.Date(paste0(seq(1875,2025,25),'-01-01')),
+               date_labels = '%Y',
+               name = '')
+```
+
+This dataset contains monthly inflation-adjusted (in January 2021 dollars) average closing prices of the S&P 500 index. There are **1,815** rows in the dataset, and each row contains a date, the first day of a month, and a value, the average closing price of the index during the month ending on the given day. The dates range from Jan. 1, 1871 to March 1, 2021. The average closing prices range from \$70.77 to \$3901.82.
+
