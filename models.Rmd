@@ -30,6 +30,14 @@ recessions <- read_csv('data/nber_recessions.csv') %>%
 
 ```{r structure, fig.width= 7.5}
 head(sp)
+```
+
+
+This dataset contains monthly inflation-adjusted (in January 2021 dollars) average closing prices of the S&P 500 index. There are **1,815** rows in the dataset, and each row contains a date, the first day of a month, and a value, the average closing price of the index during the month ending on the given day. The dates range from Jan. 1, 1871 to March 1, 2021. The average closing prices range from \$70.77 to \$3901.82.
+
+Here's what the data looks like with the y-axis on a log scale, with recessions marked with shaded areas:
+
+```{r structure, fig.width= 7.5}
 sp %>%
   ggplot() +
   geom_line(aes(date, value),
@@ -44,7 +52,7 @@ sp %>%
   
   labs(title = 'Average S&P500 Closing Price by Month, from Jan. 1, 1871 to March 1, 2021',
        subtitle = 'Shaded areas indicate recessions',
-       caption = 'Values are inflation-adjusted to Jan. 2021') +
+       caption = 'Price data from Quandl, Recession dates from NBER.\nValues are inflation adjusted to Jan. 2021') +
   
   scale_y_log10(name = 'Average Closing Price (log scale)') +
   scale_x_date(breaks = as.Date(paste0(seq(1875,2025,25),'-01-01')),
@@ -52,5 +60,23 @@ sp %>%
                name = '')
 ```
 
-This dataset contains monthly inflation-adjusted (in January 2021 dollars) average closing prices of the S&P 500 index. There are **1,815** rows in the dataset, and each row contains a date, the first day of a month, and a value, the average closing price of the index during the month ending on the given day. The dates range from Jan. 1, 1871 to March 1, 2021. The average closing prices range from \$70.77 to \$3901.82.
+## Time in the Market
+
+```{r}
+# all in on Jan 1 1871
+10000 * sp[sp$date == as.Date('2021-03-01'),'value'] / sp[sp$date == as.Date('1871-01-01'),'value']
+
+# wait for the crash
+10000 * sp[sp$date == as.Date('2021-03-01'),'value'] / sp[sp$value == min(sp$value),'value']
+```
+
+Now, let's pretend you have \$10,000 to invest. If you invested it all on Jan. 1 1871, you'd have around \$419,000 today. A handsome return! It's a shame you're too dead to enjoy it. 
+
+If you had waited for the market to crash, as it did a few years later, and bought in when the S&P was at its lowest (down around 25% from Jan. 1871), you'd have more than \$551,000. You'd be the richest dead guy in the cemetary!
+
+Of course, you probably want to enjoy your wealth while you're still alive, and 150 years is a long time to wait. If you only had forty years to invest, what month would've been the best to start?
+
+```{r}
+
+```
 
