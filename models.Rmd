@@ -8,7 +8,7 @@ output: html_document
 ```{r setup, include=FALSE}
 # set options
 knitr::opts_chunk$set(echo = F,
-                      fig.width = 7,
+                      fig.width = 7.5,
                       fig.height = 5,
                       fig.align = 'center')
 
@@ -21,34 +21,45 @@ theme_set(theme_minimal())
 
 # import S&P500 data from Quandl package
 sp <- Quandl::Quandl("MULTPL/SP500_INFLADJ_MONTH", api_key="ouXsKHk7DUeaYiFanm9b") %>%
-  janitor::clean_names()
+  janitor::clean_names() %>% 
+  arrange(date) %>%
+  
+  # filter out rows with inconsistent date
+  mutate(day = day(date)) %>% 
+  filter(day == 1) %>%
+  select(-day) %>%
+  
+  # add row numbers for easier id
+  mutate(id = row_number())
 
 # import recession dates
 recessions <- read_csv('data/nber_recessions.csv') %>% 
-  filter(end > min(sp$date))
+  filter(end > min(sp$date) | is.na(end)) %>%
+  mutate(end = if_else(is.na(end), as.Date('2021-06-01'), end))
 ```
 
 ```{r structure, fig.width= 7.5}
-head(sp)
+head(sp[,-3])
 ```
 
 
-This dataset contains monthly inflation-adjusted (in January 2021 dollars) average closing prices of the S&P 500 index. There are **1,815** rows in the dataset, and each row contains a date, the first day of a month, and a value, the average closing price of the index during the month ending on the given day. The dates range from Jan. 1, 1871 to March 1, 2021. The average closing prices range from \$70.77 to \$3901.82.
+This dataset contains monthly inflation-adjusted (in January 2021 dollars) average closing prices of the S&P 500 index. There are **1,803** rows in the dataset, and each row contains a date, the first day of a month, and a value, the average closing price of the index during the month ending on the given day. The dates range from Jan. 1, 1871 to March 1, 2021. The average closing prices range from \$70.77 to \$3901.82.
 
 Here's what the data looks like with the y-axis on a log scale, with recessions marked with shaded areas:
 
-```{r structure, fig.width= 7.5}
-sp %>%
-  ggplot() +
-  geom_line(aes(date, value),
-            color = 'navy',
-            size = 1.2) +
+```{r structure}
+ggplot() +
   
   geom_rect(aes(xmin = start, xmax = end,
                 ymin = 70.77, ymax = 3901.82),
-            fill = 'gray',
-            alpha = 0.5,
+            fill = 'red',
+            alpha = 0.15,
             data = recessions) +
+  
+  geom_line(aes(date, value),
+            color = 'navy',
+            size = 1.2,
+            data = sp) +
   
   labs(title = 'Average S&P500 Closing Price by Month, from Jan. 1, 1871 to March 1, 2021',
        subtitle = 'Shaded areas indicate recessions',
@@ -62,21 +73,115 @@ sp %>%
 
 ## Time in the Market
 
-```{r}
+```{r longterm}
+
+buySP <- function(start, end = '2021-03-01', amount = 10000){
+  
+  tbl <- sp %>% 
+    filter(between(date, as.Date(start), as.Date(end)))
+  
+  tbl %>%
+    mutate(investment = map_dbl(value, ~ amount * . / tbl[1,'value']))
+  
+}
+
+buySP_quick <- function(start, end = '2021-03-01', amount = 10000){
+  
+  tbl <- sp %>% 
+    filter(date %in% c(as.Date(start), as.Date(end)))
+  
+  tbl %>%
+    mutate(investment = map_dbl(value, ~ amount * . / tbl[1,'value']))
+  
+}
+
+endval <- function(tbl){
+  tbl %>% slice(nrow(tbl)) %>% pull(investment)
+}
+
 # all in on Jan 1 1871
-10000 * sp[sp$date == as.Date('2021-03-01'),'value'] / sp[sp$date == as.Date('1871-01-01'),'value']
+endval(buySP_quick('1871-01-01'))
 
 # wait for the crash
-10000 * sp[sp$date == as.Date('2021-03-01'),'value'] / sp[sp$value == min(sp$value),'value']
+endval(buySP_quick(sp[sp$value == min(sp$value),'date']))
 ```
 
 Now, let's pretend you have \$10,000 to invest. If you invested it all on Jan. 1 1871, you'd have around \$419,000 today. A handsome return! It's a shame you're too dead to enjoy it. 
 
 If you had waited for the market to crash, as it did a few years later, and bought in when the S&P was at its lowest (down around 25% from Jan. 1871), you'd have more than \$551,000. You'd be the richest dead guy in the cemetary!
 
-Of course, you probably want to enjoy your wealth while you're still alive, and 150 years is a long time to wait. If you only had forty years to invest, what month would've been the best to start?
+Of course, you probably want to enjoy your wealth while you're still alive, and 150 years is a long time to wait. If you only had 40 years to invest, what month would've been the best to start?
 
 ```{r}
+buySP_40 <- function(start, amount = 10000){
+  
+  # find id of starting month
+  start_id <- sp[sp$date == as.Date(start),'id']
+  
+  tbl <- sp %>% 
+    
+    # filter to start month and 40 years later
+    filter(id %in% c(start_id, start_id + 480))
+  
+  # calculate return
+  tbl %>% mutate(investment = map_dbl(value, ~ amount * . / tbl[1,'value']))
+  
+}
 
+get_return <- function(date){
+  endval(buySP_40(date))
+}
+
+# filter for possible start months for 40 year period
+forty_years <- sp %>% 
+  slice(c(1:(nrow(sp) - 480))) %>%
+  mutate(return = map_dbl(date, ~ get_return(.)))
+
+# plot returns
+ggplot() +
+  
+  geom_rect(aes(xmin = start, xmax = end,
+                ymin = 0, ymax = 100000),
+            fill = 'gray',
+            alpha = 0.5,
+            data = recessions[recessions$start <= as.Date('1981-03-01'),]) +
+  
+  geom_area(aes(date, return),
+            color = 'forestgreen',
+            fill = 'forestgreen',
+            size = 1.2,
+            alpha = 0.5,
+            data = forty_years) +
+  
+  geom_ribbon(aes(date, 
+                  ymin = return,
+                  ymax = 10000),
+            color = 'red',
+            fill = 'red',
+            size = 1.2,
+            alpha = 0.5,
+            data = forty_years[forty_years$return <= 10000,]) +
+  
+  geom_hline(aes(yintercept = 10000),
+             color = '#333333',
+             size = 1.2) +
+  
+  labs(title = 'Value of $10,000 Invested for 40 Years in S&P500 Index, by start date',
+       subtitle = 'Shaded areas indicate recessions',
+       y = 'Value 40 years later',
+       caption = 'Price data from Quandl, Recession dates from NBER.\nValues are inflation adjusted to Jan. 2021') +
+  
+  scale_y_continuous(breaks = seq(0,10^5,25000),
+                     labels = paste0('$', seq(0,100,25), 'k')) + 
+  scale_x_date(breaks = as.Date(paste0(seq(1870,1980,20),'-01-01')),
+               date_labels = '%Y',
+               name = '')
 ```
+
+If you picked a random month in this range to invest $10,000 in an S&P500 index you'd turn a profit more than 80% of the time. And you'll notice a trend in the areas where the overall return was negative: these were months where their 40-year investment interval included the Depression of 1920-21 (following World War I) or the Great Depression (1929-33) or both. Referring back to the price chart shows that you would've been closing up your investment when prices were near all-time lows after buying at relatively high prices.
+
+Most of the local peaks in months where recessions end and prices are bottoming out.
+
+Towards the right side of the graph, things just seem to keep going up and up, with the exception of a brief period in the mid-1970's, where the investment interval would end in the middle of the 2008 Financial Crisis. However, if you held strong while the market bottomed out, you'd come out clean on the other side. Interestingly, while the American economy is currently in a recession, the stock market has continued its march upwards and has recently hit multiple all-time highs.
+
 
