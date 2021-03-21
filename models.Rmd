@@ -32,6 +32,22 @@ sp <- Quandl::Quandl("MULTPL/SP500_INFLADJ_MONTH", api_key="ouXsKHk7DUeaYiFanm9b
   # add row numbers for easier id
   mutate(id = row_number())
 
+# function to find monthly value change
+findChange <- function(){
+  vals <- c()
+  prices <- sp[,'value']
+  for (i in c(1:nrow(sp))){
+    change <- prices[i+1] / prices[i]
+    vals <- append(vals, change)
+  }
+  # return vector of values
+  tibble('factor' = vals)
+}
+
+# add monthly change column
+sp <- bind_cols(sp, findChange()) %>% 
+  mutate('pct_change' = (factor - 1) * 100)
+
 # import recession dates
 recessions <- read_csv('data/nber_recessions.csv') %>% 
   filter(end > min(sp$date) | is.na(end)) %>%
@@ -47,7 +63,7 @@ This dataset contains monthly inflation-adjusted (in January 2021 dollars) avera
 
 Here's what the data looks like with the y-axis on a log scale, with recessions marked with shaded areas:
 
-```{r structure}
+```{r prices}
 ggplot() +
   
   geom_rect(aes(xmin = start, xmax = end,
@@ -75,6 +91,7 @@ ggplot() +
 
 ```{r longterm}
 
+# function to calculate with intermediate values
 buySP <- function(start, end = '2021-03-01', amount = 10000){
   
   tbl <- sp %>% 
@@ -85,6 +102,7 @@ buySP <- function(start, end = '2021-03-01', amount = 10000){
   
 }
 
+# only calculates start and end
 buySP_quick <- function(start, end = '2021-03-01', amount = 10000){
   
   tbl <- sp %>% 
@@ -95,6 +113,7 @@ buySP_quick <- function(start, end = '2021-03-01', amount = 10000){
   
 }
 
+# extract final value from table
 endval <- function(tbl){
   tbl %>% slice(nrow(tbl)) %>% pull(investment)
 }
@@ -112,7 +131,7 @@ If you had waited for the market to crash, as it did a few years later, and boug
 
 Of course, you probably want to enjoy your wealth while you're still alive, and 150 years is a long time to wait. If you only had 40 years to invest, what month would've been the best to start?
 
-```{r}
+```{r returns}
 buySP_40 <- function(start, amount = 10000){
   
   # find id of starting month
@@ -169,19 +188,54 @@ ggplot() +
   labs(title = 'Value of $10,000 Invested for 40 Years in S&P500 Index, by start date',
        subtitle = 'Shaded areas indicate recessions',
        y = 'Value 40 years later',
+       x = 'Start date of investment',
        caption = 'Price data from Quandl, Recession dates from NBER.\nValues are inflation adjusted to Jan. 2021') +
   
   scale_y_continuous(breaks = seq(0,10^5,25000),
                      labels = paste0('$', seq(0,100,25), 'k')) + 
   scale_x_date(breaks = as.Date(paste0(seq(1870,1980,20),'-01-01')),
-               date_labels = '%Y',
-               name = '')
+               date_labels = '%Y')
 ```
 
 If you picked a random month in this range to invest $10,000 in an S&P500 index you'd turn a profit more than 80% of the time. And you'll notice a trend in the areas where the overall return was negative: these were months where their 40-year investment interval included the Depression of 1920-21 (following World War I) or the Great Depression (1929-33) or both. Referring back to the price chart shows that you would've been closing up your investment when prices were near all-time lows after buying at relatively high prices.
 
-Most of the local peaks in months where recessions end and prices are bottoming out.
+Most of the local peaks occur in months where recessions end and prices are bottoming out.
 
 Towards the right side of the graph, things just seem to keep going up and up, with the exception of a brief period in the mid-1970's, where the investment interval would end in the middle of the 2008 Financial Crisis. However, if you held strong while the market bottomed out, you'd come out clean on the other side. Interestingly, while the American economy is currently in a recession, the stock market has continued its march upwards and has recently hit multiple all-time highs.
 
+## Timing the Market
+
+Now, you might look at the graph above and think, "Well, why don't I just wait for the market to crash, and I'll buy when things are cheaper!" You certainly wouldn't be alone in that logic. Let's say you keep the 40 year investment interval, but instead of investing everything at the beginning, you wait and try to buy when you think the prices are at their lowest.
+
+With the simple math above, it wouldn't make much of a difference- the only penalty for waiting to invest is rising prices. But, in the real world, how long you keep an investment matters much more because some stocks pay dividends, which can be reinvested. In this way, investors can use compound interest to grow the value of their investment exponentially. In reality, the value of dividends changes just like the stock, but to simplify things, let's assume an annual 2% dividend, and that we'll immediately reinvest the dividend. For example, if you invest \$10,000, and the index increases 10%, at the end of the first year you'll have \$11,220: \$10,000 principal, \$1,000 (10%) appreciation, and a 2% (\$220) dividend on your new principal of $11,000.
+
+```{r compounding}
+
+# calculate returns with dividend
+compound <- function(start, end = '2021-03-01', amount = 10000, dividend = 0.02){
+  
+  tbl <- sp %>% 
+    filter(between(date, as.Date(start), as.Date(end)))
+  
+  
+  
+  tbl %>%
+    mutate(investment = map_dbl(value, ~ amount * . / tbl[1,'value']))
+  
+}
+
+findChange <- function(){
+  vals <- c()
+  for (i in c(1:nrow(sp))){
+    prices <- sp[,'value']
+    if(i == nrow(sp)){
+      append(vals, 0)
+    }else{
+      change <- prices[i] / prices[i+1]
+      append(vals, change)
+    }
+  }
+}
+
+```
 
