@@ -46,7 +46,10 @@ findChange <- function(){
 
 # add monthly change column
 sp <- bind_cols(sp, findChange()) %>% 
-  mutate('pct_change' = (factor - 1) * 100)
+  mutate('pct_change' = (factor - 1) * 100) %>%
+  
+  # reorder columns
+  .[,c(3,1,2,4,5)]
 
 # import recession dates
 recessions <- read_csv('data/nber_recessions.csv') %>% 
@@ -211,31 +214,51 @@ With the simple math above, it wouldn't make much of a difference- the only pena
 
 ```{r compounding}
 
-# calculate returns with dividend
+# calculate returns with annual dividend
 compound <- function(start, end = '2021-03-01', amount = 10000, dividend = 0.02){
   
+  # extract relevant data
   tbl <- sp %>% 
     filter(between(date, as.Date(start), as.Date(end)))
   
+  # vector for returns
+  returns <- tibble('investment' = rep(0, length.out = nrow(tbl)))
   
-  
-  tbl %>%
-    mutate(investment = map_dbl(value, ~ amount * . / tbl[1,'value']))
-  
-}
-
-findChange <- function(){
-  vals <- c()
-  for (i in c(1:nrow(sp))){
-    prices <- sp[,'value']
-    if(i == nrow(sp)){
-      append(vals, 0)
-    }else{
-      change <- prices[i] / prices[i+1]
-      append(vals, change)
-    }
+  # calculate returns by row
+  for(i in c(1:nrow(tbl))){
+    
+    # find change in price, add dividend every 12 months
+    returns[i, 'investment'] <- amount * tbl[i, 'value'] / tbl[1, 'value'] * (1 + dividend) ^ (floor(i/12))
   }
+  
+  # return table with returns column
+  bind_cols(tbl, returns)
 }
 
+# function to calculate returns after 40 years without intermediate values
+compound40 <- function(start, amount = 10000, dividend = 0.02){
+  
+  # find id of starting month
+  start_id <- sp[sp$date == as.Date(start),'id']
+  
+  # extract data for relevant dates
+  tbl <- sp %>% 
+    
+    # filter to start month and 40 years later
+    filter(id %in% c(start_id, start_id + 480))
+  
+  # vector for returns
+  returns <- tibble('investment' = rep(0, length.out = nrow(tbl)))
+  
+  # calculate return by row
+  for(i in c(1:nrow(tbl))){
+    
+    # find change in price, add dividend every 12 months
+    returns[i, 'investment'] <- amount * tbl[i, 'value'] / tbl[1, 'value'] * (1 + dividend) ^ 40
+  }
+  
+  # return table with returns column
+  bind_cols(tbl, returns)
+}
 ```
 
